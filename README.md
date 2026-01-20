@@ -2,6 +2,221 @@
 
 A Docker-based PostgreSQL reporting system with Node.js API for tracking product borrowing events and user payment methods.
 
+
+---
+
+## Deliverables
+
+### 1. Summary of Work Completed
+
+Built a complete reporting API system that solves two business problems:
+
+| Task | Description | Status |
+|------|-------------|--------|
+| **Task 1** | Database setup with PostgreSQL + Docker | ✅ Complete |
+| **Task 2** | SQL query for lost/unreturned products | ✅ Complete |
+| **Task 3** | SQL query for expiring payment methods | ✅ Complete |
+| **Task 4** | REST API implementation | ✅ Complete |
+
+**Key accomplishments:**
+- Designed and implemented PostgreSQL schema with `user_events` and `product_events` tables
+- Wrote optimized SQL queries using `NOT EXISTS` and `DISTINCT ON` patterns
+- Built Node.js/Express API with clean architecture (Repository → Service → Controller)
+- Added Swagger/OpenAPI documentation for all endpoints
+- Created Docker setup for easy deployment with sample data
+
+---
+
+### 2. SQL Statements and Results
+
+#### Task 2: Find Lost Products (Unreturned for 3+ Months)
+
+**SQL Query:**
+```sql
+SELECT
+  pe.product_id,
+  pe.user_id,
+  pe.location,
+  pe.evt_date AS borrow_date,
+  pe.transaction_id,
+  pe.location_id,
+  pe.platform
+FROM product_events pe
+WHERE pe.evt_type = 'borrow'
+  AND pe.evt_date < NOW() - INTERVAL '3 months'
+  AND NOT EXISTS (
+    SELECT 1
+    FROM product_events ret
+    WHERE ret.evt_type = 'return'
+      AND ret.transaction_id = pe.transaction_id
+  )
+ORDER BY pe.evt_date ASC;
+```
+
+**Query Result (Sample Data):**
+| product_id | user_id | location | borrow_date | transaction_id | days_since_borrow |
+|------------|---------|----------|-------------|----------------|-------------------|
+| 1 | 3 | LOC A | 2024-01-23 14:00:00 | 5 | 362 |
+| 4 | 4 | LOC B | 2024-01-09 09:00:00 | 7 | 376 |
+
+---
+
+#### Task 3: Find Borrows with Expiring Payment Methods
+
+**SQL Query 1 - Get Active Borrows:**
+```sql
+SELECT
+  pe.product_id,
+  pe.user_id,
+  pe.location,
+  pe.evt_date AS borrow_date,
+  pe.transaction_id,
+  pe.location_id,
+  pe.platform
+FROM product_events pe
+WHERE pe.evt_type = 'borrow'
+  AND NOT EXISTS (
+    SELECT 1
+    FROM product_events ret
+    WHERE ret.evt_type = 'return'
+      AND ret.transaction_id = pe.transaction_id
+  )
+ORDER BY pe.evt_date ASC;
+```
+
+**SQL Query 2 - Get Latest Payment Methods:**
+```sql
+SELECT DISTINCT ON (user_id)
+  user_id,
+  evt_date,
+  platform,
+  meta
+FROM user_events
+WHERE evt_type = 'add-payment-method'
+ORDER BY user_id, evt_date DESC;
+```
+
+**Combined Query Result (Sample Data):**
+| product_id | user_id | location | borrow_date | payment_valid_until | payment_status |
+|------------|---------|----------|-------------|---------------------|----------------|
+| 4 | 4 | LOC B | 2024-01-09 09:00:00 | 01/24 | expired |
+
+---
+
+### 3. Source Code for Task 4
+
+The API source code is located in the `api/` directory:
+
+```
+api/
+├── src/
+│   ├── index.js                  # Application entry point
+│   ├── app.js                    # Express app setup
+│   ├── config/
+│   │   ├── database.js           # PostgreSQL connection pool
+│   │   └── index.js              # Environment configuration
+│   ├── controllers/
+│   │   ├── product.controller.js # Product endpoint handlers
+│   │   └── health.controller.js  # Health check handler
+│   ├── services/
+│   │   └── product.service.js    # Business logic layer
+│   ├── repositories/
+│   │   ├── base.repository.js    # Base repository class
+│   │   ├── productEvent.repository.js  # Product queries
+│   │   └── userEvent.repository.js     # User queries
+│   ├── routes/
+│   │   ├── index.js              # Route registration
+│   │   ├── product.routes.js     # Product routes
+│   │   └── health.routes.js      # Health routes
+│   ├── middleware/
+│   │   └── errorHandler.js       # Global error handler
+│   ├── utils/
+│   │   ├── dateUtils.js          # Date parsing utilities
+│   │   ├── responseFormatter.js  # Response formatting
+│   │   └── AppError.js           # Custom error class
+│   └── swagger/
+│       └── swagger.js            # OpenAPI specification
+├── docs/
+│   └── queries.md                # SQL documentation
+└── package.json
+```
+
+**Key API Endpoints:**
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/health` | Health check |
+| GET | `/api/products/lost` | Get unreturned products (3+ months) |
+| GET | `/api/products/expiring-payments` | Get borrows with expiring payment methods |
+| GET | `/api-docs` | Swagger documentation |
+
+---
+
+### 4. Documentation
+
+#### Architecture
+
+The API follows a layered architecture pattern:
+
+```
+Request → Routes → Controllers → Services → Repositories → Database
+```
+
+| Layer | Responsibility |
+|-------|----------------|
+| **Routes** | Define endpoints, apply middleware, Swagger docs |
+| **Controllers** | Handle HTTP requests/responses |
+| **Services** | Business logic, data transformation |
+| **Repositories** | Database queries, data access |
+
+#### Query Strategy
+
+Two SQL patterns were chosen for the queries:
+
+1. **NOT EXISTS** - Used for finding unreturned products
+   - Clear intent, NULL-safe, well-optimized by PostgreSQL
+   - Stops at first match (efficient)
+
+2. **DISTINCT ON** - Used for getting latest payment per user
+   - PostgreSQL-specific, elegant solution for "most recent per group"
+   - Single query instead of subquery with MAX()
+
+See [QUERY_APPROACHES.md](./QUERY_APPROACHES.md) for detailed comparison of alternative approaches.
+
+#### Payment Status Logic
+
+Payment expiry dates (MM/YY format) are converted to the last day of that month:
+- `01/25` → `2025-01-31`
+
+Status thresholds:
+| Status | Condition |
+|--------|-----------|
+| `expired` | Already past expiry date |
+| `critical` | Expires within 7 days |
+| `warning` | Expires within 30 days |
+| `ok` | Valid for 30+ days |
+
+---
+
+### 5. Time Spent
+
+![Time Tracking Report](./image.png)
+
+| Task | Time |
+|------|------|
+| Docker setup, SQL queries & analysis | 00:52:04 |
+| API development (Express, SOLID/DRY, Swagger) | 03:06:01 |
+| **Total** | **03:58:05** |
+
+*Time tracked using [Clockify](https://clockify.me)*
+
+---
+
+### Questions?
+
+Feel free to reach out if you have any questions about the implementation!
+
+---
 ## Features
 
 - **Lost Products Tracking** - Identify products borrowed for 3+ months without return
@@ -256,5 +471,6 @@ db-task/
 │       └── 002_load_data.sql         # Load sample data
 ├── docker-compose.yml                # Docker orchestration
 ├── Dockerfile                        # PostgreSQL container
+├── QUERY_APPROACHES.md               # SQL query strategies documentation
 └── .env                              # Environment variables
 ```
