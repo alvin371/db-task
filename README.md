@@ -199,8 +199,8 @@ Status thresholds:
 ---
 
 ### 5. Time Spent
+<img width="1469" height="920" alt="image" src="https://github.com/user-attachments/assets/3990cf14-3f2e-4944-9628-2c4e43063b14" />
 
-![Time Tracking Report](./image.png)
 
 | Task | Time |
 |------|------|
