@@ -8,3 +8,12 @@ services:
       - 5432:5432
     volumes:
       - ./postgres:/var/lib/postgresql/data
+  api:
+    build: ./api
+    env_file: ./api/.env
+    environment:
+      DB_HOST: pg_superset_dev
+    ports:
+      - 3000:3000
+    depends_on:
+      - pg_superset_dev

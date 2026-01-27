@@ -243,7 +243,7 @@ POSTGRES_DB=postgres
 PGDATA=/var/lib/postgresql/data
 ```
 
-Create `.env` in the `api/` folder for the API server:
+Create `.env` in the `api/` folder for the API server (used for local, non-Docker runs):
 
 ```env
 PORT=3000
@@ -254,15 +254,25 @@ DB_USER=postgres
 DB_PASSWORD=password123!
 ```
 
-### 2. Start the database
+### 2. Quick run with Docker (API + DB)
 
 ```bash
 docker-compose up --build
 ```
 
-Wait until you see the database is ready to accept connections.
+The API will be available at `http://localhost:3000` once both containers are up.
 
-### 3. Install API dependencies
+### 3. Local API run (optional)
+
+If you prefer running the API outside Docker, start only the database:
+
+```bash
+docker-compose up --build pg_superset_dev
+```
+
+Wait until you see the database is ready to accept connections, then:
+
+### 4. Install API dependencies
 
 Open a new terminal:
 
@@ -271,13 +281,13 @@ cd api
 pnpm install
 ```
 
-### 4. Start the API server
+### 5. Start the API server
 
 ```bash
 pnpm start
 ```
 
-### 5. Verify the setup
+### 6. Verify the setup
 
 Open your browser to [http://localhost:3000/api-docs](http://localhost:3000/api-docs) to see the Swagger documentation.
 
@@ -288,7 +298,7 @@ Open your browser to [http://localhost:3000/api-docs](http://localhost:3000/api-
 ### Start the database only
 
 ```bash
-docker-compose up --build
+docker-compose up --build pg_superset_dev
 ```
 
 ### Start the API in development mode (auto-reload)
